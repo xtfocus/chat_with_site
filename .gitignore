@@ -1,0 +1,82 @@
+# Byte-compiled and cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env
+*.env
+*.venv
+
+# Jupyter Notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Logs and debugging
+*.log
+*.out
+*.err
+logs/
+
+# Compiled files
+*.so
+*.dll
+*.dylib
+*.o
+*.a
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# IDEs and editors
+.vscode/
+.idea/
+*.iml
+
+# Testing and coverage reports
+.coverage
+.tox/
+.nox/
+htmlcov/
+
+# Pip and dependency management
+pip-log.txt
+pip-delete-this-directory.txt
+Pipfile
+Pipfile.lock
+poetry.lock
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+MANIFEST
+
+# Docker
+*.pid
+*.sock
+
+# MyPy and type checking
+.mypy_cache/
+.dmypy.json
+.pyre/
+pytype/
+
+# Black formatter
+.black/
+
+# Pytest cache
+.pytest_cache/
+
+# Jupyter Lab
+.jupyter/
+
+# Temporary files
+*.swp
+*.swo
+*~
