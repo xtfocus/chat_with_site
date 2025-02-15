@@ -2,7 +2,7 @@
 
 # Chat with sites
 
-[screenshot](images/chat_screenshot.jpg)
+![screenshot](images/chat_screenshot.jpg)
 
 Dockertized and augmented version of [ottomator](https://github.com/coleam00/ottomator-agents/blob/main/crawl4AI-agent/README.md)
 
