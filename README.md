@@ -44,9 +44,18 @@ Status color:
 - green: ready
 - blue: ingesting
 
+A sitemap.xml URL is the location of a special XML file on a website that provides search engines like Google, Bing, and others with a structured list of the important pages on the site. It helps search engines understand the site's content and efficiently crawl and index its pages.
+
+In this application, you provide the sitemap.xml URL, and it crawls from urls listed under that xml.
+
 ## Disclaimer
 
-Most code is copied from https://github.com/coleam00/ottomator-agents/blob/main/crawl4AI-agent/README.md with some changes. 
+Not all sites contains valid sitemap.xml URL. Fortunately, popular documentation sites usually do. For example:
+- https://ai.pydantic.dev/sitemap.xml
+- https://langchain-ai.github.io/langgraph/sitemap.xml
+- https://docs.crawl4ai.com/sitemap.xml
+
+Most code is copied from [Cole's](https://github.com/coleam00/ottomator-agents/blob/main/crawl4AI-agent/README.md), with some changes. 
 Also check out his [Youtube channel](https://www.youtube.com/@ColeMedin)
 
 I do not support unethical crawling. This repo is for education only.
