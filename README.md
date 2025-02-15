@@ -1,10 +1,6 @@
-(Most code is copied from https://github.com/coleam00/ottomator-agents/blob/main/crawl4AI-agent/README.md with changes to allow for multi-sources)
-
 # Chat with sites
 
 ![screenshot](images/chat_screenshot.jpg)
-
-Dockertized and augmented version of [ottomator](https://github.com/coleam00/ottomator-agents/blob/main/crawl4AI-agent/README.md)
 
 ## Requirements
 - Create a project at supabase, acquire url and api_key
@@ -28,7 +24,6 @@ Execute the SQL commands in `site_pages.sql` to:
 
 In Supabase, do this by going to the "SQL Editor" tab and pasting in the SQL into the editor there. Then click "Run".
 
-
 ### Streamlit Web Interface
 
 For an interactive web interface to query the documentation:
@@ -50,6 +45,9 @@ Status color:
 - blue: ingesting
 
 ## Disclaimer
+
+Most code is copied from https://github.com/coleam00/ottomator-agents/blob/main/crawl4AI-agent/README.md with some changes. 
+Also check out his [Youtube channel](https://www.youtube.com/@ColeMedin)
 
 I do not support unethical crawling. This repo is for education only.
 
