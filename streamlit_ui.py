@@ -1,143 +1,239 @@
-from __future__ import annotations
-from typing import Literal, TypedDict
 import asyncio
 import os
+from dataclasses import dataclass
+from typing import Literal, TypedDict
 
 import streamlit as st
-import json
-import logfire
-from supabase import Client
+from loguru import logger
 from openai import AsyncOpenAI
+from pydantic_ai.messages import (ModelMessage, ModelMessagesTypeAdapter,
+                                  ModelRequest, ModelResponse, RetryPromptPart,
+                                  SystemPromptPart, TextPart, ToolCallPart,
+                                  ToolReturnPart, UserPromptPart)
+from supabase import Client
 
-# Import all the message part classes
-from pydantic_ai.messages import (
-    ModelMessage,
-    ModelRequest,
-    ModelResponse,
-    SystemPromptPart,
-    UserPromptPart,
-    TextPart,
-    ToolCallPart,
-    ToolReturnPart,
-    RetryPromptPart,
-    ModelMessagesTypeAdapter
-)
-from pydantic_ai_expert import pydantic_ai_expert, PydanticAIDeps
+from multi_site_crawler import (BasicTextSplitter, SitemapIndexer,
+                                SupabaseURLIndexer, get_distinct_sources,
+                                sitemap_indexer)
+from multi_site_expert import PydanticAIDeps, multi_site_expert
 
-# Load environment variables
-from dotenv import load_dotenv
-load_dotenv()
-
+# Initialize OpenAI and Supabase clients
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-supabase: Client = Client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_SERVICE_KEY")
-)
+supabase: Client = Client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
 
-# Configure logfire to suppress warnings (optional)
-logfire.configure(send_to_logfire='never')
 
 class ChatMessage(TypedDict):
     """Format of messages sent to the browser/API."""
 
-    role: Literal['user', 'model']
+    role: Literal["user", "model"]
     timestamp: str
     content: str
 
 
-def display_message_part(part):
-    """
-    Display a single part of a message in the Streamlit UI.
-    Customize how you display system prompts, user prompts,
-    tool calls, tool returns, etc.
-    """
-    # system-prompt
-    if part.part_kind == 'system-prompt':
-        with st.chat_message("system"):
-            st.markdown(f"**System**: {part.content}")
-    # user-prompt
-    elif part.part_kind == 'user-prompt':
-        with st.chat_message("user"):
-            st.markdown(part.content)
-    # text
-    elif part.part_kind == 'text':
-        with st.chat_message("assistant"):
-            st.markdown(part.content)          
+def initialize_session_state():
+    """Initialize Streamlit session state variables."""
+    if "urls" not in st.session_state:
+        st.session_state.urls = []
+    if "url_status" not in st.session_state:
+        st.session_state.url_status = {}
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "document_sources" not in st.session_state:
+        st.session_state.document_sources = []
 
 
-async def run_agent_with_streaming(user_input: str):
-    """
-    Run the agent with streaming text for the user_input prompt,
-    while maintaining the entire conversation in `st.session_state.messages`.
-    """
-    # Prepare dependencies
+def display_message_part(part, container):
+    """Display a single message part in the Streamlit UI within the specified container."""
+    if part.part_kind == "system-prompt":
+        with container.chat_message("system"):
+            container.markdown(f"**System**: {part.content}")
+    elif part.part_kind == "user-prompt":
+        with container.chat_message("user"):
+            container.markdown(part.content)
+    elif part.part_kind == "text":
+        with container.chat_message("assistant"):
+            container.markdown(part.content)
+
+
+async def crawl_url(url, index):
+    """Crawl a URL and update its status."""
+    try:
+        await sitemap_indexer.run(url)
+        st.session_state.urls[index]["status"] = "completed"
+    except Exception as e:
+        st.error(f"Error crawling {url}: {e}")
+        st.session_state.urls[index]["status"] = "error"
+    st.rerun()
+
+
+def render_url_section():
+    """Render the URL management section."""
+    st.markdown("### Enter sitemap urls!")
+
+    sources = asyncio.run(get_distinct_sources())
+
+    # Display existing sources
+    for i, source in enumerate(sources):
+        row_col1, row_col2 = st.columns([4, 0.5])
+        with row_col1:
+            selected = st.checkbox(source, key=f"source_{i}", value=True)
+
+            if selected and source not in st.session_state.document_sources:
+                st.session_state.document_sources.append(source)
+            elif not selected and source in st.session_state.document_sources:
+                st.session_state.document_sources.remove(source)
+
+        with row_col2:
+            st.markdown(
+                "<span style='color: green; font-size: 24px;'>●</span>",
+                unsafe_allow_html=True,
+            )
+
+    # Add new URL button
+    if st.button("＋ Add"):
+        st.session_state.urls.append({"url": "", "status": "pending"})
+
+    # Display URL entries
+    for i, url_data in enumerate(st.session_state.urls):
+        render_url_entry(i, url_data)
+
+
+def render_url_entry(index, url_data):
+    """Render a single URL entry with its status indicator."""
+    row_col1, row_col2 = st.columns([4, 0.5])
+    with row_col1:
+        new_url = st.text_input(
+            label=f"URL {index + 1}",
+            value=url_data["url"],
+            placeholder="Enter new sitemap URL",
+            label_visibility="collapsed",
+            key=f"new_url_{index}",
+        )
+        st.session_state.urls[index]["url"] = new_url
+
+    with row_col2:
+        render_url_status(url_data, index, new_url)
+
+
+def render_url_status(url_data, index, url):
+    """Render the status indicator for a URL."""
+    if url_data["status"] == "pending":
+        if st.button("➤", key=f"new_url_arrow_{index}"):
+            st.session_state.urls[index]["status"] = "processing"
+            st.rerun()
+    elif url_data["status"] == "processing":
+        st.markdown(
+            "<span style='color: blue; font-size: 24px;'>●</span>",
+            unsafe_allow_html=True,
+        )
+        asyncio.run(crawl_url(url, index))
+    elif url_data["status"] == "completed":
+        st.markdown(
+            "<span style='color: green; font-size: 24px;'>●</span>",
+            unsafe_allow_html=True,
+        )
+
+
+async def run_agent_with_streaming(user_input: str, message_container):
+    """Run the agent with streaming response."""
+    # Gather selected document sources
+    document_sources = st.session_state.get("document_sources", [])
+
+    logger.debug(f"document_sources = {document_sources}")
+
     deps = PydanticAIDeps(
         supabase=supabase,
-        openai_client=openai_client
+        openai_client=openai_client,
+        document_sources=document_sources,  # Pass selected sources here
     )
 
-    # Run the agent in a stream
-    async with pydantic_ai_expert.run_stream(
-        user_input,
-        deps=deps,
-        message_history= st.session_state.messages[:-1],  # pass entire conversation so far
+    async with multi_site_expert.run_stream(
+        user_input, deps=deps, message_history=st.session_state.messages[:-1]
     ) as result:
-        # We'll gather partial text to show incrementally
         partial_text = ""
-        message_placeholder = st.empty()
+        message_placeholder = message_container.empty()
 
-        # Render partial text as it arrives
         async for chunk in result.stream_text(delta=True):
             partial_text += chunk
             message_placeholder.markdown(partial_text)
 
-        # Now that the stream is finished, we have a final result.
-        # Add new messages from this run, excluding user-prompt messages
-        filtered_messages = [msg for msg in result.new_messages() 
-                            if not (hasattr(msg, 'parts') and 
-                                    any(part.part_kind == 'user-prompt' for part in msg.parts))]
+        filtered_messages = [
+            msg
+            for msg in result.new_messages()
+            if not (
+                hasattr(msg, "parts")
+                and any(part.part_kind == "user-prompt" for part in msg.parts)
+            )
+        ]
         st.session_state.messages.extend(filtered_messages)
-
-        # Add the final response to the messages
         st.session_state.messages.append(
             ModelResponse(parts=[TextPart(content=partial_text)])
         )
 
 
-async def main():
-    st.title("Pydantic AI Agentic RAG")
-    st.write("Ask any question about Pydantic AI, the hidden truths of the beauty of this framework lie within.")
+def render_chat_interface():
+    """Render the chat interface with proper layout."""
+    st.markdown("### Chat with sites")
 
-    # Initialize chat history in session state if not present
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    # Create a container for the entire chat interface
+    chat_area = st.container()
 
-    # Display all messages from the conversation so far
-    # Each message is either a ModelRequest or ModelResponse.
-    # We iterate over their parts to decide how to display them.
+    # Create a container for messages that will scroll
+    message_container = chat_area.container()
+
+    # Add some spacing to prevent the last message from being hidden
+    message_container.markdown(
+        "<div style='height: 100px'></div>", unsafe_allow_html=True
+    )
+
+    # Display all previous messages in the scrolling container
     for msg in st.session_state.messages:
-        if isinstance(msg, ModelRequest) or isinstance(msg, ModelResponse):
+        if isinstance(msg, (ModelRequest, ModelResponse)):
             for part in msg.parts:
-                display_message_part(part)
+                display_message_part(part, message_container)
 
-    # Chat input for the user
-    user_input = st.chat_input("What questions do you have about Pydantic AI?")
+    # Create a container for the input at the bottom
+    input_container = chat_area.container()
+
+    # Add the chat input in the bottom container
+    user_input = input_container.chat_input(
+        "What questions do you have about Pydantic AI?"
+    )
 
     if user_input:
-        # We append a new request to the conversation explicitly
+        # Add user message to history
         st.session_state.messages.append(
             ModelRequest(parts=[UserPromptPart(content=user_input)])
         )
-        
-        # Display user prompt in the UI
-        with st.chat_message("user"):
-            st.markdown(user_input)
 
-        # Display the assistant's partial response while streaming
-        with st.chat_message("assistant"):
-            # Actually run the agent now, streaming the text
-            await run_agent_with_streaming(user_input)
+        # Display user message
+        with message_container.chat_message("user"):
+            message_container.markdown(user_input)
+
+        # Display assistant response
+        with message_container.chat_message("assistant"):
+            asyncio.run(run_agent_with_streaming(user_input, message_container))
+
+        # Rerun to update the UI
+        st.rerun()
+
+
+def main():
+    """Main application entry point."""
+    st.set_page_config(layout="wide")
+    initialize_session_state()
+
+    # Create the main layout
+    url_col, chat_col = st.columns([1, 2])
+
+    # Render URL section in left column
+    with url_col:
+        render_url_section()
+
+    # Render chat interface in right column
+    with chat_col:
+        render_chat_interface()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

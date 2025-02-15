@@ -1,6 +1,10 @@
-Codes copied from https://github.com/coleam00/ottomator-agents/blob/main/crawl4AI-agent/README.md with minor changes
+(Most code is copied from https://github.com/coleam00/ottomator-agents/blob/main/crawl4AI-agent/README.md with changes to allow for multi-sources)
 
-# Deployment
+# Chat with sites
+
+[screenshot](images/chat_screenshot.jpg)
+
+Dockertized and augmented version of [ottomator](https://github.com/coleam00/ottomator-agents/blob/main/crawl4AI-agent/README.md)
 
 ## Requirements
 - Create a project at supabase, acquire url and api_key
@@ -10,6 +14,7 @@ Codes copied from https://github.com/coleam00/ottomator-agents/blob/main/crawl4A
 ## Usage
 
 Start the container:
+
 ```bash
 docker compose up --build -d
 ````
@@ -23,33 +28,34 @@ Execute the SQL commands in `site_pages.sql` to:
 
 In Supabase, do this by going to the "SQL Editor" tab and pasting in the SQL into the editor there. Then click "Run".
 
-### Crawl Documentation
-
-To crawl and store documentation in the vector database:
-
-```bash
-docker exec -it crawl4ai-python_env-1 sh -c "python crawl_pydantic_ai_docs.py"
-```
-
-This will:
-1. Fetch URLs from the documentation sitemap
-2. Crawl each page and split into chunks
-3. Generate embeddings and store in Supabase (Using OpenAI)
-
-**Notes:** At this step I met RLS-related errror, so I simply went to `supabase.com/dashboard/project/prjid/auth/policies` to disable RLS. After the ingesting is complete, I turn it back on. It's lame but I cannot be bothered soon.
 
 ### Streamlit Web Interface
 
 For an interactive web interface to query the documentation:
 
 ```bash
-docker exec -d crawl4ai-python_env-1 sh -c "streamlit run streamlit_ui.py
+docker exec -it crawl4ai-python_env-1 sh -c "streamlit run streamlit_ui.py"
 ```
 
-# Next plan:
+**Notes:** I met RLS-related errror when trying to insert rows, so I simply went to `supabase.com/dashboard/project/yourprojid/auth/policies` to disable RLS. After the ingesting is complete, I turn it back on. It's lame but I cannot be bothered soon.
 
+## Functionalities:
+
+- UI for ingesting from sitemap.xml urls
+- UI for chat
+- Select/Deselect multi sources to chat with
+
+Status color:
+- green: ready
+- blue: ingesting
+
+## Disclaimer
+
+I do not support unethical crawling. This repo is for education only.
+
+
+## Next plan:
 Scope of search:
-- Allow selecting multiple sites to chat with at once
 - Allow selecting github repos to chat with as well
 
 Search and generate config:
@@ -58,5 +64,4 @@ Search and generate config:
 Agentic RAG:
 - More complexities: decomposition, delegation, looping
 - Tools
-
 
